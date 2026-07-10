@@ -9,6 +9,7 @@ public final class DepliteAgent: @unchecked Sendable {
     public let workflows: AgentWorkflows
     public let jobs: AgentJobs
     public let files: AgentFiles
+    public let deploy: AgentDeploy
 
     private let http: HTTPClient
     private let key: Ed25519Key
@@ -26,6 +27,7 @@ public final class DepliteAgent: @unchecked Sendable {
         self.workflows = AgentWorkflows(http: http, agentId: identity.agentId, key: key)
         self.jobs = AgentJobs(http: http, agentId: identity.agentId, key: key)
         self.files = AgentFiles(http: http, agentId: identity.agentId, key: key, session: session)
+        self.deploy = AgentDeploy(http: http, agentId: identity.agentId, key: key, serverPublicKeyPEM: identity.serverPublicKeyPEM)
     }
 
     public func heartbeat() async throws {
@@ -86,6 +88,7 @@ public final class DepliteAgent: @unchecked Sendable {
 internal func parseAgentEvent(name: String, data: String, serverPublicKeyPEM: String) -> AgentEvent {
     switch name {
     case "deploy": return parseDeploy(data: data, serverPublicKeyPEM: serverPublicKeyPEM)
+    case "cancel": return parseCancel(data: data)
     case "revoke": return .revoke
     case "sync_workflows", "workflows-refresh": return .syncWorkflows
     case "ping": return .ping
@@ -125,4 +128,26 @@ private func parseDeploy(data: String, serverPublicKeyPEM: String) -> AgentEvent
     } catch {
         return .unknown(name: "deploy", data: data)
     }
+}
+
+// `cancel` is unsigned; the backend gates it on the authenticated stream.
+private func parseCancel(data: String) -> AgentEvent {
+    guard let node = try? CanonicalJSON.parse(data), case .object(let entries) = node else {
+        return .unknown(name: "cancel", data: data)
+    }
+    var jobId: String? = nil
+    var reason: String? = nil
+    var superseded = false
+    var actor: String? = nil
+    for (k, v) in entries {
+        switch k {
+        case "job_id", "jobId": if case .string(let s) = v { jobId = s }
+        case "reason": if case .string(let s) = v { reason = s }
+        case "superseded": if case .bool(let b) = v { superseded = b }
+        case "actor": if case .string(let s) = v { actor = s }
+        default: break
+        }
+    }
+    guard let jobId = jobId else { return .unknown(name: "cancel", data: data) }
+    return .cancel(jobId: jobId, reason: reason, superseded: superseded, actor: actor)
 }

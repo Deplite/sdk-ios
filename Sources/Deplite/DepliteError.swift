@@ -9,6 +9,7 @@ public enum DepliteError: Error, Sendable {
     case invalidPrivateKey
     case signing(reason: String)
     case sseClosed(reason: String)
+    case verification(reason: String)
 }
 
 extension DepliteError: LocalizedError {
@@ -21,6 +22,7 @@ extension DepliteError: LocalizedError {
         case .invalidPrivateKey: return "Deplite invalid private key"
         case .signing(let reason): return "Deplite signing error: \(reason)"
         case .sseClosed(let reason): return "Deplite SSE closed: \(reason)"
+        case .verification(let reason): return "Deplite verification error: \(reason)"
         }
     }
 }
