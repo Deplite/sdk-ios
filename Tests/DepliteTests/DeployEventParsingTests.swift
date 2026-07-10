@@ -49,9 +49,49 @@ final class DeployEventParsingTests: XCTestCase {
         } else { XCTFail("expected unknown") }
     }
 
+    func testUserCancelEvent() {
+        let data = #"{"job_id":"j-1","reason":"user requested","actor":"u-9"}"#
+        let ev = parseAgentEvent(name: "cancel", data: data, serverPublicKeyPEM: "")
+        guard case .cancel(let jobId, let reason, let superseded, let actor) = ev else {
+            return XCTFail("expected cancel, got \(ev)")
+        }
+        XCTAssertEqual(jobId, "j-1")
+        XCTAssertEqual(reason, "user requested")
+        XCTAssertFalse(superseded)
+        XCTAssertEqual(actor, "u-9")
+    }
+
+    func testSupersededCancelEvent() {
+        let data = #"{"job_id":"j-1","reason":"superseded by release 1.3.0","superseded":true}"#
+        let ev = parseAgentEvent(name: "cancel", data: data, serverPublicKeyPEM: "")
+        guard case .cancel(let jobId, let reason, let superseded, let actor) = ev else {
+            return XCTFail("expected cancel, got \(ev)")
+        }
+        XCTAssertEqual(jobId, "j-1")
+        XCTAssertEqual(reason, "superseded by release 1.3.0")
+        XCTAssertTrue(superseded)
+        XCTAssertNil(actor)
+    }
+
+    func testCancelEventWithNullReason() {
+        let data = #"{"job_id":"j-1","reason":null,"actor":"u-9"}"#
+        let ev = parseAgentEvent(name: "cancel", data: data, serverPublicKeyPEM: "")
+        guard case .cancel(_, let reason, let superseded, _) = ev else {
+            return XCTFail("expected cancel, got \(ev)")
+        }
+        XCTAssertNil(reason)
+        XCTAssertFalse(superseded)
+    }
+
+    func testCancelWithoutJobIdIsUnknown() {
+        let ev = parseAgentEvent(name: "cancel", data: #"{"reason":"x"}"#, serverPublicKeyPEM: "")
+        guard case .unknown = ev else { return XCTFail("expected unknown") }
+    }
+
     private func label(_ ev: AgentEvent) -> String {
         switch ev {
         case .deploy: return "deploy"
+        case .cancel: return "cancel"
         case .revoke: return "revoke"
         case .syncWorkflows: return "syncWorkflows"
         case .ping: return "ping"

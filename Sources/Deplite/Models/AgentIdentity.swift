@@ -1,6 +1,6 @@
 import Foundation
 
-/// Non-secret identity returned by enrollment. Safe to persist anywhere.
+/// Non-secret identity returned by registration. Safe to persist anywhere.
 public struct AgentIdentity: Codable, Sendable, Equatable {
     public let agentId: String
     public let organizationId: String

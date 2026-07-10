@@ -92,6 +92,26 @@ internal final class HTTPClient: @unchecked Sendable {
         let _: EmptyResponse = try await signed(agentId: agentId, key: key, method: method, path: path, body: body)
     }
 
+    /// Signed request returning the raw response bytes. Callers that must verify
+    /// a signature over the wire payload need the untouched body.
+    func signedData(
+        agentId: String,
+        key: Ed25519Key,
+        method: String,
+        path: String
+    ) async throws -> Data {
+        let ts = String(Int(Date().timeIntervalSince1970))
+        let nonce = Nonce.next()
+        let canonical = CanonicalMessage.build(timestamp: ts, nonce: nonce, method: method, path: path, body: Data())
+        let signature = try key.sign(canonical).base64EncodedString()
+        return try await executeRaw(method: method, path: path, bodyBytes: nil) { req in
+            req.setValue(agentId, forHTTPHeaderField: "x-agent-id")
+            req.setValue(ts, forHTTPHeaderField: "x-timestamp")
+            req.setValue(nonce, forHTTPHeaderField: "x-nonce")
+            req.setValue(signature, forHTTPHeaderField: "x-signature")
+        }
+    }
+
     // MARK: - Plumbing
 
     private func encode<T: Encodable>(_ body: T?) throws -> Data? {
@@ -106,6 +126,23 @@ internal final class HTTPClient: @unchecked Sendable {
         bodyBytes: Data?,
         configure: (inout URLRequest) -> Void
     ) async throws -> Res {
+        let data = try await executeRaw(method: method, path: path, bodyBytes: bodyBytes, configure: configure)
+        if Res.self == EmptyResponse.self {
+            return EmptyResponse() as! Res
+        }
+        do {
+            return try Self.decoder.decode(Res.self, from: data)
+        } catch {
+            throw DepliteError.decoding(underlying: error, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
+    private func executeRaw(
+        method: String,
+        path: String,
+        bodyBytes: Data?,
+        configure: (inout URLRequest) -> Void
+    ) async throws -> Data {
         let urlString = baseURL.absoluteString + (path.hasPrefix("/") ? path : "/" + path)
         guard let url = URL(string: urlString) else {
             throw DepliteError.api(statusCode: 0, body: "invalid URL: \(urlString)")
@@ -130,22 +167,14 @@ internal final class HTTPClient: @unchecked Sendable {
             throw DepliteError.api(statusCode: 0, body: String(data: data, encoding: .utf8) ?? "")
         }
 
-        let bodyString = String(data: data, encoding: .utf8) ?? ""
         if !(200...299).contains(http.statusCode) {
+            let bodyString = String(data: data, encoding: .utf8) ?? ""
             if http.statusCode == 401 || http.statusCode == 403 {
                 throw DepliteError.unauthorized(statusCode: http.statusCode, body: bodyString)
             }
             throw DepliteError.api(statusCode: http.statusCode, body: bodyString)
         }
-
-        if Res.self == EmptyResponse.self || data.isEmpty {
-            return EmptyResponse() as! Res
-        }
-        do {
-            return try Self.decoder.decode(Res.self, from: data)
-        } catch {
-            throw DepliteError.decoding(underlying: error, body: bodyString)
-        }
+        return data
     }
 }
 

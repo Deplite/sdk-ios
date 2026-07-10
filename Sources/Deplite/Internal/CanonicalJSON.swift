@@ -89,6 +89,12 @@ internal enum CanonicalJSON {
             case "\n": out += "\\n"
             case "\r": out += "\\r"
             case "\t": out += "\\t"
+            // matches Go encoding/json default escaping used by the backend signer
+            case "&": out += "\\u0026"
+            case "<": out += "\\u003c"
+            case ">": out += "\\u003e"
+            case "\u{2028}": out += "\\u2028"
+            case "\u{2029}": out += "\\u2029"
             default:
                 if scalar.value < 0x20 {
                     out += String(format: "\\u%04x", scalar.value)
