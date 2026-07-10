@@ -11,6 +11,12 @@ public final class Deplite: @unchecked Sendable {
     public let baseURL: URL
     public let triggers: Triggers
     public let files: Files
+    /// Introspection of `apiToken` itself.
+    public let token: Token
+    /// Agents this token can reach.
+    public let agents: Agents
+    /// Workflows this token can run.
+    public let workflows: Workflows
 
     public init(
         apiToken: String,
@@ -22,10 +28,13 @@ public final class Deplite: @unchecked Sendable {
         let http = HTTPClient(baseURL: baseURL, session: session)
         self.triggers = Triggers(http: http, apiToken: apiToken)
         self.files = Files(http: http, apiToken: apiToken, session: session)
+        self.token = Token(http: http, apiToken: apiToken)
+        self.agents = Agents(http: http, apiToken: apiToken)
+        self.workflows = Workflows(http: http, apiToken: apiToken)
     }
 
     /// Register the current device or service as a Deplite agent.
-    public static func enroll(
+    public static func register(
         installCode: String,
         name: String,
         hostname: String? = nil,
@@ -33,7 +42,7 @@ public final class Deplite: @unchecked Sendable {
         agentVersion: String? = nil,
         baseURL: URL = Deplite.defaultBaseURL,
         session: URLSession = .shared
-    ) async throws -> Enrollment {
+    ) async throws -> Registration {
         let keys = Ed25519Key.generate()
         let http = HTTPClient(baseURL: baseURL, session: session)
         let req = EnrollRequest(
@@ -55,7 +64,7 @@ public final class Deplite: @unchecked Sendable {
             baseURL: HTTPClient.trim(baseURL),
             serverPublicKeyPEM: res.serverPublicKey
         )
-        return Enrollment(identity: identity, privateKey: keys.rawSeed)
+        return Registration(identity: identity, privateKey: keys.rawSeed)
     }
 
     internal struct EnrollRequest: Encodable {

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Output of `Deplite.enroll`. Caller persists both fields.
-public struct Enrollment: Sendable, Equatable {
+/// Output of `Deplite.register`. Caller persists both fields.
+public struct Registration: Sendable, Equatable {
     public let identity: AgentIdentity
     public let privateKey: Data
 
